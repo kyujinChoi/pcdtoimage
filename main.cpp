@@ -3,6 +3,7 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/filters/voxel_grid.h>
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Geometry> 
 #include <opencv2/opencv.hpp>
@@ -32,6 +33,7 @@ int main(int argc, char** argv)
     // }
     
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr voxelCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     if (pcl::io::loadPCDFile<pcl::PointXYZRGB>("/home/rp/Documents/local_data/b5_20240605_1_voxel0.01_wall_floor_reference_xyzrgb.pcd", *mapCloud) == -1) //* load the file
     // if (pcl::io::loadPCDFile<pcl::PointXYZRGB>(argv[1], *mapCloud) == -1) //* load the file
     {
@@ -44,13 +46,18 @@ int main(int argc, char** argv)
     float min_y = std::numeric_limits<float>::max();
     float max_y = std::numeric_limits<float>::lowest();
 
-    for (const auto& point : mapCloud->points) {
+    int idx = 0;
+    for (const auto& point : mapCloud->points) 
+    {
         if (point.x < min_x) min_x = point.x;
         if (point.x > max_x) max_x = point.x;
         if (point.y < min_y) min_y = point.y;
         if (point.y > max_y) max_y = point.y;
     }
-
+    pcl::VoxelGrid<pcl::PointXYZRGB> vg;
+    vg.setInputCloud (mapCloud);
+    vg.setLeafSize (0.1f, 0.1f, 0.1f);
+    vg.filter (*voxelCloud);
     float range_x = max_x - min_x;
     float range_y = max_y - min_y;
 
@@ -71,8 +78,10 @@ int main(int argc, char** argv)
     }
     std::string image_fn("/home/rp/Documents/local_data/");
     std::string txt_fn("/home/rp/Documents/local_data/");
+    std::string pcd_fn("/home/rp/Documents/local_data/");
     image_fn += "/map_image.jpg";
     txt_fn += "/meta.txt";
+    pcd_fn += "/map_data_voxelized.pcd";
     std::ofstream outFile(txt_fn);
     if (!outFile) {
         std::cerr << "Cannot open " << txt_fn << std::endl;
@@ -87,6 +96,7 @@ int main(int argc, char** argv)
     outFile << "int x = static_cast<int>((mapCloud->points[i].x - min_x) * (image_width / range_x));" << std::endl;
     outFile << "int y = image_height - static_cast<int>((mapCloud->points[i].y - min_y) * (image_height / range_y));" << std::endl;
     outFile.close();
+    pcl::io::savePCDFileBinary<pcl::PointXYZRGB>(pcd_fn, *voxelCloud); //binary mod
     cv::imwrite(image_fn, mapImage);
     std::string window_name = "Bird's Eye View";
     cv::namedWindow(window_name, cv::WINDOW_NORMAL);  // 윈도우 크기 조정 가능하게 설정
